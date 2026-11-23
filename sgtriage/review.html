@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Label frames</title>
+<style>
+  :root { --bg:#111317; --panel:#1b1e24; --line:#2b3038; --text:#e8eaed; --muted:#9aa3ad;
+          --yes:#e5484d; --no:#3f9e5b; --unsure:#b08a2e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { display:flex; gap:16px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header b { font-weight:600; }
+  .bar { flex:1; height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:#5b8def; }
+  .muted { color:var(--muted); }
+  main { display:grid; grid-template-columns: 1fr 300px; gap:16px; padding:16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .frame { background:#000; border-radius:8px; overflow:hidden; position:relative; }
+  .frame img { display:block; width:100%; height:auto; }
+  .frame.zoom img { width:200%; }
+  .frame.zoom { overflow:auto; max-height:78vh; }
+  .tag { position:absolute; left:8px; top:8px; background:rgba(0,0,0,.6); padding:2px 8px; border-radius:4px; font-size:12px; }
+  aside { display:flex; flex-direction:column; gap:12px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .btns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  button { font:inherit; color:var(--text); background:#262a31; border:1px solid var(--line); border-radius:6px; padding:10px 6px; cursor:pointer; }
+  button:hover { border-color:#4a5160; }
+  button.yes { border-color:var(--yes); } button.no { border-color:var(--no); } button.unsure { border-color:var(--unsure); }
+  .kinds { display:grid; grid-template-columns:1fr; gap:6px; margin-top:8px; }
+  .kinds button { text-align:left; padding:6px 8px; font-size:13px; }
+  kbd { background:#2b3038; border-radius:3px; padding:0 5px; font-size:12px; }
+  .current { font-size:13px; }
+  .state-yes { color:var(--yes); } .state-no { color:var(--no); } .state-unsure { color:var(--unsure); }
+  .help li { margin:2px 0; }
+  .help { margin:0; padding-left:18px; color:var(--muted); font-size:13px; }
+  #done { display:none; padding:40px; text-align:center; font-size:18px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Is a traffic incident visible in the right-hand (current) frame?</b>
+  <div class="bar"><i id="bar"></i></div>
+  <span id="count" class="muted"></span>
+</header>
+<div id="done">All frames labelled. You can close this tab and stop the server.</div>
+<main id="main">
+  <section>
+    <div class="frame" id="curWrap"><span class="tag" id="curTag">current</span><img id="cur" alt="current frame"></div>
+  </section>
+  <aside>
+    <div class="frame" id="prevWrap"><span class="tag">earlier frame</span><img id="prev" alt="previous frame"></div>
+    <div class="panel">
+      <div class="btns">
+        <button class="yes" data-l="yes">Incident <kbd>Y</kbd></button>
+        <button class="no" data-l="no">None <kbd>N</kbd></button>
+        <button class="unsure" data-l="unsure">Can't tell <kbd>U</kbd></button>
+      </div>
+      <div class="kinds">
+        <button data-k="collision">1 · Collision / crashed vehicle</button>
+        <button data-k="stopped_vehicle">2 · Stopped / broken-down vehicle</button>
+        <button data-k="obstacle">3 · Debris / obstacle</button>
+        <button data-k="emergency_response">4 · Police, ambulance, recovery</button>
+        <button data-k="people_on_road">5 · People on the carriageway</button>
+      </div>
+    </div>
+    <div class="panel current" id="meta"></div>
+    <div class="panel">
+      <ul class="help">
+        <li><kbd>Y</kbd> incident, <kbd>N</kbd> none, <kbd>U</kbd> too dark / blurred / unclear</li>
+        <li><kbd>1</kbd>–<kbd>5</kbd> incident with its kind</li>
+        <li><kbd>←</kbd> back, <kbd>→</kbd> skip, <kbd>Z</kbd> zoom, <kbd>P</kbd> hide earlier frame</li>
+        <li>Congestion alone is <b>not</b> an incident.</li>
+      </ul>
+    </div>
+  </aside>
+</main>
+<script>
+let items = [], labels = {}, i = 0, shownAt = 0;
+const $ = id => document.getElementById(id);
+
+// Recheck mode: /?only=yes,unsure shows just the frames currently labelled that way (still blind to the VLM)
+const only = (new URLSearchParams(location.search).get('only') || '').split(',').filter(Boolean);
+async function load() {
+  const r = await fetch('/api/items'); const j = await r.json();
+  items = j.items; labels = j.labels || {};
+  if (only.length) {
+    items = items.filter(it => labels[it.review_id] && only.includes(labels[it.review_id].label));
+    i = 0;
+    document.querySelector('header b').textContent = `Recheck: ${items.length} frames you labelled ${only.join(' or ')}. Press the right key again, or → to keep it.`;
+  } else {
+    i = items.findIndex(it => !labels[it.review_id]); if (i < 0) i = items.length;
+  }
+  render();
+}
+function counts() {
+  const c = {yes:0, no:0, unsure:0};
+  for (const v of Object.values(labels)) c[v.label] = (c[v.label] || 0) + 1;
+  return c;
+}
+function render() {
+  const n = items.length, c = counts();
+  const done = only.length ? i : Object.keys(labels).length;
+  $('bar').style.width = (100 * done / Math.max(1, n)) + '%';
+  $('count').textContent = only.length ? `${done}/${n} rechecked` : `${done}/${n} labelled · ${c.yes} incident · ${c.no} none · ${c.unsure} unclear`;
+  if (i >= n) { $('main').style.display = 'none'; $('done').style.display = 'block'; return; }
+  $('main').style.display = ''; $('done').style.display = 'none';
+  const it = items[i];
+  $('cur').src = '/img/' + it.img;
+  $('prevWrap').style.display = it.prev ? '' : 'none';
+  if (it.prev) $('prev').src = '/img/' + it.prev;
+  const l = labels[it.review_id];
+  $('meta').innerHTML = `<div>Item ${i + 1} of ${n}</div><div class="muted">Camera ${it.camera_id} · ${it.time}</div>` +
+    (l ? `<div class="state-${l.label}">Labelled: ${l.label}${l.kind ? ' · ' + l.kind : ''}</div>` : '');
+  shownAt = performance.now();
+  for (let k = 1; k <= 3; k++) { const nx = items[i + k]; if (nx) { new Image().src = '/img/' + nx.img; if (nx.prev) new Image().src = '/img/' + nx.prev; } }
+}
+async function label(l, kind = '') {
+  if (i >= items.length) return;
+  const it = items[i], ms = Math.round(performance.now() - shownAt);
+  labels[it.review_id] = {label: l, kind};
+  fetch('/api/label', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({review_id: it.review_id, label: l, kind, ms})});
+  i++; render();
+}
+document.querySelectorAll('[data-l]').forEach(b => b.onclick = () => label(b.dataset.l));
+document.querySelectorAll('[data-k]').forEach(b => b.onclick = () => label('yes', b.dataset.k));
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  const kinds = {'1':'collision','2':'stopped_vehicle','3':'obstacle','4':'emergency_response','5':'people_on_road'};
+  if (k === 'y') label('yes');
+  else if (k === 'n') label('no');
+  else if (k === 'u') label('unsure');
+  else if (kinds[k]) label('yes', kinds[k]);
+  else if (k === 'arrowleft' || k === 'backspace') { i = Math.max(0, i - 1); render(); e.preventDefault(); }
+  else if (k === 'arrowright') { i = Math.min(items.length, i + 1); render(); }
+  else if (k === 'z') $('curWrap').classList.toggle('zoom');
+  else if (k === 'p') $('prevWrap').style.display = $('prevWrap').style.display === 'none' ? '' : 'none';
+});
+load();
+</script>
+</body>
+</html>

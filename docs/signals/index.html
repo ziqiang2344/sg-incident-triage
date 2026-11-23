@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Signal Timing Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A simulated four-junction corridor showing how signal timing changes queues, stops and collision risk. Concept demo with simulated traffic.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: a signal engineer's bench. The live corridor and its time-space diagram take the width, timing controls sit in a rail beside them, results and the method follow below. */
+:root {
+  --bg:#F1F3F2; --surface:#FFFFFF; --text:#1D2125; --muted:#5B646B; --rule:#C5CBCF; --grid:#E4E8E9;
+  --green:#006B3F; --red:#C8261D;
+  --road:#2B3035; --verge:#DCE1DF; --mark:#EEF0EC; --car:#F6F7F3; --queue:#F29A2E;
+  --sig-g:#22A55B; --sig-a:#F1B21B; --sig-r:#E03A2D; --trail:rgba(29,33,37,.40);
+  --font:"Overpass", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg:#15181B; --surface:#1E2226; --text:#E5E8EA; --muted:#A0A9B0; --rule:#384047; --grid:#2A3035;
+  --green:#39A86B; --red:#FF5B4F;
+  --road:#363C43; --verge:#1B1F22; --mark:#C9CED1; --car:#ECEFF1; --queue:#F7A64A;
+  --sig-g:#2FBF6C; --sig-a:#F5BE2E; --sig-r:#FF5A4C; --trail:rgba(229,232,234,.40);
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg:#15181B; --surface:#1E2226; --text:#E5E8EA; --muted:#A0A9B0; --rule:#384047; --grid:#2A3035;
+  --green:#39A86B; --red:#FF5B4F;
+  --road:#363C43; --verge:#1B1F22; --mark:#C9CED1; --car:#ECEFF1; --queue:#F7A64A;
+  --sig-g:#2FBF6C; --sig-a:#F5BE2E; --sig-r:#FF5A4C; --trail:rgba(229,232,234,.40);
+  color-scheme: dark; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.55 var(--font); font-variant-numeric: tabular-nums; }
+a { color: var(--green); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, select:focus-visible, input[type=range]:focus-visible, summary:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; padding-block: 18px; border-bottom: 1px solid var(--rule); }
+header.top b { font-weight: 800; }
+header.top nav { display: flex; gap: 18px; flex-wrap: wrap; font-size: 15px; }
+section { padding-block: 32px; border-bottom: 1px solid var(--rule); }
+section.intro { padding-block: 32px 8px; border-bottom: 0; }
+h1 { font-size: clamp(28px, 4.2vw, 40px); line-height: 1.1; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 14px; max-width: 22ch; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.2; font-weight: 800; margin: 0 0 12px; text-wrap: balance; }
+p { margin: 0 0 12px; max-width: 68ch; }
+.lede { font-size: 18px; }
+.note { font-size: 15px; color: var(--muted); }
+.small { font-size: 14px; }
+.muted { color: var(--muted); }
+
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; padding-top: 16px; }
+@media (max-width: 980px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.stage { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.roadwrap { overflow-x: auto; border-radius: 6px; }
+#road { display: block; width: 100%; min-width: 720px; height: 250px; border-radius: 6px; }
+.scrollhint { display: none; font-size: 13px; color: var(--muted); margin: 0; }
+@media (max-width: 760px) { .scrollhint { display: block; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.lg::before { content: ""; display: inline-block; width: 16px; height: 7px; margin-right: 6px; vertical-align: 1px; border-radius: 1px; }
+.lg.car::before { background: var(--car); box-shadow: inset 0 0 0 1px var(--rule); }
+.lg.queue::before { background: var(--queue); }
+.lg.ring::before { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--sig-r); }
+.lg.brake::before { width: 10px; height: 10px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--sig-a); }
+h2.ts-h { font-size: 17px; margin: 18px 0 0; }
+#ts { display: block; width: 100%; height: 280px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.caption { font-size: 14px; color: var(--muted); }
+
+.rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend { font-weight: 600; font-size: 15px; padding: 0; }
+.segrow { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 6px; border: 1px solid var(--text); border-radius: 6px; overflow: hidden; }
+.segrow input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.segrow label { text-align: center; padding: 8px 4px; font-weight: 600; font-size: 14px; cursor: pointer; border-left: 1px solid var(--text); }
+.segrow label:first-of-type { border-left: 0; }
+.segrow input:checked + label { background: var(--text); color: var(--bg); }
+.segrow input:focus-visible + label { outline: 3px solid var(--green); outline-offset: -3px; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+.ctl label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-weight: 600; font-size: 15px; }
+.ctl output { font-weight: 400; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.ctl.off { opacity: .45; }
+input[type=range] { width: 100%; accent-color: var(--green); margin: 8px 0 0; }
+select { font: 400 15px var(--font); padding: 6px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--text); }
+.ctl select { display: block; margin-top: 6px; }
+.play { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 4px; }
+.btn { font: 600 15px var(--font); padding: 9px 16px; border-radius: 6px; border: 1px solid var(--text); background: var(--text); color: var(--bg); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--text); }
+.btn:disabled { opacity: .5; cursor: default; }
+.clock { font-size: 13px; color: var(--muted); }
+
+.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px; margin: 8px 0 14px; }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { border-top: 3px solid var(--text); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stat.safety { border-top-color: var(--sig-r); }
+.stat b { font-size: 30px; font-weight: 800; line-height: 1; }
+.stat span { font-size: 13px; color: var(--muted); line-height: 1.3; }
+details.defs { margin-top: 6px; }
+details.defs summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+details.defs ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; max-width: 76ch; }
+details.defs li { margin: 4px 0; }
+
+.tablewrap { overflow-x: auto; margin-top: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; line-height: 1.3; }
+td.num, th.num { text-align: right; }
+td .bar { display: block; height: 4px; background: var(--rule); margin: 0 0 5px auto; width: var(--w); min-width: 2px; }
+td.best { font-weight: 800; color: var(--green); }
+td.best .bar { background: var(--green); }
+
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
+@media (max-width: 900px) { ol.steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { ol.steps { grid-template-columns: minmax(0, 1fr); } }
+ol.steps li { border-top: 3px solid var(--green); padding-top: 10px; font-size: 15px; min-width: 0; }
+ol.steps li::before { counter-increment: s; content: counter(s); display: block; font-weight: 800; font-size: 24px; color: var(--green); line-height: 1; margin-bottom: 8px; }
+footer { padding-block: 24px 48px; font-size: 14px; color: var(--muted); }
+footer p { max-width: 80ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <b>Signal Timing Lab</b>
+  <nav><a href="https://ziqiang2344.github.io/sg-incident-triage/">Incident data test</a><a href="https://github.com/ziqiang2344/sg-incident-triage">Code</a></nav>
+</header>
+
+<section class="intro">
+  <h1>How signal timing changes queues, stops and collision risk</h1>
+  <p class="lede">A one-way city road with four signalised junctions, simulated vehicle by vehicle. Pick a control mode, change the timing, and watch the effect on the road and in the time–space diagram below it.</p>
+  <p class="note">This is a concept demo with simulated traffic.</p>
+</section>
+
+<section class="bench" aria-label="Simulator">
+  <div class="stage">
+    <div class="roadwrap"><canvas id="road" role="img" aria-label="Live view of the simulated corridor, traffic driving west to east through four junctions"></canvas></div>
+    <p class="scrollhint">Swipe the road sideways to see all four junctions.</p>
+    <div class="legend">
+      <span class="lg car">Moving</span><span class="lg queue">Stopped</span><span class="lg ring">Red-light run or conflict</span><span class="lg brake">Hard braking</span><span>Vehicles keep left; the main road runs west to east</span>
+    </div>
+    <h2 class="ts-h">Time–space diagram</h2>
+    <canvas id="ts" role="img" aria-label="Time-space diagram of main-road vehicles and signals over the last five minutes"></canvas>
+    <p class="caption">Each line is one main-road vehicle over the last five minutes, climbing as it moves east. Each bar is a junction's signal for the main road. Flat stretches are vehicles waiting at red. In green-wave mode the lines pass every junction inside one green band.</p>
+  </div>
+
+  <aside class="rail" aria-label="Signal timing controls">
+    <fieldset>
+      <legend>Control</legend>
+      <div class="segrow">
+        <input type="radio" name="mode" id="m-fixed" value="fixed" checked><label for="m-fixed">Fixed time</label>
+        <input type="radio" name="mode" id="m-wave" value="wave"><label for="m-wave">Green wave</label>
+        <input type="radio" name="mode" id="m-adaptive" value="adaptive"><label for="m-adaptive">Adaptive</label>
+      </div>
+      <p class="hint" id="mode-hint"></p>
+    </fieldset>
+    <div class="ctl"><label for="demand">Main road traffic <output id="demand-o" for="demand"></output></label><input type="range" id="demand" min="300" max="1100" step="25" value="650"></div>
+    <div class="ctl"><label for="cross">Side street traffic <output id="cross-o" for="cross"></output></label><input type="range" id="cross" min="50" max="500" step="10" value="220"></div>
+    <div class="ctl timing"><label for="cycle">Cycle length <output id="cycle-o" for="cycle"></output></label><input type="range" id="cycle" min="60" max="150" step="5" value="90"></div>
+    <div class="ctl timing"><label for="split">Main road share of green <output id="split-o" for="split"></output></label><input type="range" id="split" min="40" max="80" step="1" value="62"></div>
+    <div class="ctl"><label for="amber">Amber <output id="amber-o" for="amber"></output></label><input type="range" id="amber" min="2" max="5" step="0.1" value="3"><p class="hint" id="amber-hint"></p></div>
+    <div class="ctl"><label for="allred">All-red <output id="allred-o" for="allred"></output></label><input type="range" id="allred" min="0" max="3" step="0.1" value="1"><p class="hint">Time with every approach on red, so vehicles that entered on amber clear the junction before crossing traffic gets green.</p></div>
+    <div class="ctl"><label for="vlim">Speed limit</label><select id="vlim"><option value="50">50 km/h</option><option value="60" selected>60 km/h</option><option value="70">70 km/h</option></select></div>
+    <div class="play">
+      <button type="button" class="btn" id="play">Pause</button>
+      <select id="speed" aria-label="Simulation speed"><option value="1">1× speed</option><option value="4" selected>4× speed</option><option value="16">16× speed</option></select>
+      <button type="button" class="btn ghost" id="reset">New traffic</button>
+    </div>
+    <span class="clock" id="clock" aria-live="off"></span>
+  </aside>
+</section>
+
+<section class="readout">
+  <h2>Since the last change</h2>
+  <div class="stats">
+    <div class="stat"><b id="s-delay">–</b><span>Delay per vehicle, seconds</span></div>
+    <div class="stat"><b id="s-stops">–</b><span>Stops per vehicle</span></div>
+    <div class="stat safety"><b id="s-rear">–</b><span>Rear-end conflicts per hour</span></div>
+    <div class="stat safety"><b id="s-hard">–</b><span>Hard braking per hour</span></div>
+    <div class="stat safety"><b id="s-red">–</b><span>Red-light runs per hour</span></div>
+    <div class="stat safety"><b id="s-side">–</b><span>Side-impact conflicts per hour</span></div>
+  </div>
+  <p class="small muted" id="warm">Measuring.</p>
+  <details class="defs">
+    <summary>How each measure is counted</summary>
+    <ul>
+      <li><b>Delay</b> is a vehicle's travel time minus its time at its own desired speed, averaged over vehicles that finished their trip.</li>
+      <li><b>Stops</b> count each time a vehicle comes to a halt after moving.</li>
+      <li><b>Rear-end conflict</b> is a time-to-collision with the vehicle ahead under 1.5 s while closing faster than 3 m/s, a common threshold in surrogate safety studies.</li>
+      <li><b>Hard braking</b> is a deceleration above 3.4 m/s², about a third of g.</li>
+      <li><b>Red-light run</b> is a vehicle crossing the stop line after its amber has ended. Drivers decide at the start of amber whether they can stop in time.</li>
+      <li><b>Side-impact conflict</b> is a main-road vehicle and a side-street vehicle inside the junction at the same time.</li>
+    </ul>
+  </details>
+</section>
+
+<section class="compare">
+  <h2>Compare the three control modes</h2>
+  <p>Runs each mode for 30 simulated minutes with your current settings and the same arriving vehicles, so the control is the only difference.</p>
+  <div class="play"><button type="button" class="btn" id="run">Run comparison</button><span id="run-status" class="small muted" aria-live="polite"></span></div>
+  <div class="tablewrap"><table id="cmp" hidden>
+    <thead><tr><th>Control</th><th class="num">Delay per vehicle (s)</th><th class="num">Stops per vehicle</th><th class="num">Rear-end conflicts /h</th><th class="num">Hard braking /h</th><th class="num">Red-light runs /h</th><th class="num">Side-impact conflicts /h</th></tr></thead>
+    <tbody id="cmp-body"></tbody>
+  </table></div>
+  <p class="small muted">This is a toy model, so read the direction of each change rather than the exact numbers. Lower is better in every column.</p>
+</section>
+
+<section class="fit">
+  <h2>How this fits the proposal</h2>
+  <ol class="steps">
+    <li><b>Calibrate.</b> LTA's loop-detector counts and signal plans set the traffic and the timings at each junction.</li>
+    <li><b>Label.</b> The incident feed and camera footage mark where incidents and conflicts between vehicles happen. A VLM describes each candidate and a person confirms it.</li>
+    <li><b>Learn.</b> An RL agent per junction learns timings in the simulator, replacing the adaptive rule here. This semester at NUS I led a multi-agent RL project on air traffic that re-plans flights to avoid contrail regions while keeping complexity low. <a href="https://rainbridge123.github.io/contrail-lab/">See its 3D replay</a>.</li>
+    <li><b>Test.</b> Each candidate timing is scored on delay and collision risk in simulation before anything changes on the road.</li>
+  </ol>
+</section>
+
+<footer>
+  <p>Concept demo by Lim Zi Qiang. Vehicles follow the Intelligent Driver Model with a mix of cautious and assertive drivers and some buses. The corridor, traffic and drivers are made up and not calibrated to any real junction.</p>
+</footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Corridor geometry, in metres
+  const L = 1300;                       // main road length
+  const JX = [250, 520, 820, 1080];     // junction centres
+  const CW = 20;                        // width of the side street, crossed by main-road traffic
+  const MW = 7;                         // width of the main road (two lanes), crossed by side-street traffic
+  const SB = 2;                         // stop line set back from the junction
+  const CL = 120;                       // side-street approach length
+  const CROSS_LEN = 2 * CL + MW;
+  const STOP = JX.map((x) => x - CW / 2 - SB);
+  const BOX_IN = JX.map((x) => x - CW / 2);
+  const BOX_OUT = JX.map((x) => x + CW / 2);
+  const CSTOP = CL - SB;
+
+  const DT = 0.1;                       // time step, s
+  const HB = 12;                        // steps of history kept per vehicle for reaction delays
+  const WIN = 300;                      // time-space window, s
+  const HARD = 3.4, TTC_MIN = 1.5, CLOSE_MIN = 3;
+  const MIN_G = 15, MAX_G = 60, MIN_GC = 8, MAX_GC = 40;
+  const UNCOORD = [0, 0.46, 0.17, 0.71]; // offsets as a share of the cycle, chosen with no link between junctions
+  const NAMES = { fixed: 'Fixed time', wave: 'Green wave', adaptive: 'Adaptive' };
+
+  class Sim {
+    constructor(p, seed, ui) {
+      this.p = { ...p };
+      this.ui = ui;
+      this.t = 0;
+      this.n = 0;
+      this.main = [[], []];
+      this.cross = JX.map(() => [[], []]);
+      const r0 = rng(seed);
+      const stream = (kind, lane, j) => ({ kind, lane, j, r: rng(Math.floor(r0() * 2147483647)), next: 0, wait: [] });
+      this.streams = [stream('m', 0, -1), stream('m', 1, -1)];
+      JX.forEach((_, j) => { this.streams.push(stream('c', 0, j), stream('c', 1, j)); });
+      this.streams.forEach((s) => { s.next = this.gap(s); });
+      this.sig = JX.map(() => ({ phase: 'MG', tIn: 0 }));
+      this.ms = JX.map(() => 'G');
+      this.cs = JX.map(() => 'R');
+      this.hist = JX.map(() => []);
+      this.trails = [];
+      this.events = [];
+      this.pairs = new Set();
+      this.sample = -1;
+      this.touch = 0;
+      this.resetCounts(120);
+      this.signals(true);
+    }
+
+    resetCounts(warm) {
+      this.from = this.t + warm;
+      this.m = { veh: 0, delay: 0, stops: 0, rear: 0, hard: 0, red: 0, side: 0 };
+    }
+    rate(s) { return (s.kind === 'm' ? this.p.demand : this.p.cross) / 3600; }
+    gap(s) { return -Math.log(1 - s.r()) / Math.max(this.rate(s), 1e-6); }
+
+    vehicle(s, born) {
+      const r = s.r, main = s.kind === 'm';
+      const bus = r() < (main ? 0.07 : 0.03);
+      const keen = r() < 0.15;
+      const vLim = (this.p.vlim / 3.6) * (main ? 1 : 0.8);
+      const v0 = vLim * (0.92 + 0.18 * r());
+      const bComf = 2.0 + r();
+      const bStop = (keen ? 3.4 : 2.6) + 1.2 * r();
+      const tr = 0.7 + 0.7 * r();
+      const rt = 0.3 + 0.3 * r();       // reaction to the vehicle ahead (drivers also anticipate, so this is shorter than a braking reaction)
+      return {
+        id: ++this.n, kind: s.kind, lane: s.lane, j: s.j, x: 0, v: 0, a: 0, bus,
+        len: bus ? 12 : 4.5, v0: bus ? Math.min(v0, vLim * 0.95) : v0, T: keen ? 1.0 : 1.5,
+        amax: bus ? 0.9 : keen ? 2.0 : 1.4, b: 2.0, s0: 2.0, bComf: bus ? 1.8 : bComf, bStop: bus ? Math.min(bStop, 3.0) : bStop, tr,
+        rk: Math.round(rt / DT), hx: new Float64Array(HB), hv: new Float64Array(HB), hp: 0,
+        born, stops: 0, moving: true, rearOn: false, hardOn: false, dec: {}, trail: main && this.ui ? [] : null,
+      };
+    }
+    // What a driver acts on: the vehicle ahead as it was one reaction time ago, projected forward at its speed then.
+    follow(v, l) {
+      const i = (l.hp - v.rk + HB) % HB, i1 = (i - 1 + HB) % HB;
+      const lv = l.hv[i], la = clamp((l.hv[i] - l.hv[i1]) / DT, -9, v.amax);
+      let a = this.acc(v, l.hx[i] + lv * v.rk * DT - l.len - v.x, lv, la);
+      const g = l.x - l.len - v.x, cv = v.v - l.v;
+      if (g < 3 || (cv > 0 && g < cv)) a = Math.min(a, this.acc(v, g, l.v, Math.min(l.a, v.amax)));   // emergency braking on what is really there
+      return a;
+    }
+    // Car following: the Intelligent Driver Model with the constant-acceleration heuristic (Treiber and Kesting's ACC model), which avoids braking harder than the situation needs.
+    acc(v, s, vl, al) {
+      const g = Math.max(s, 0.1), aIdm = this.idm(v, g, v.v - vl), den = vl * vl - 2 * g * al;
+      const cah = vl * (v.v - vl) <= -2 * g * al && den > 1e-6 ? (v.v * v.v * al) / den : al - (v.v > vl ? (v.v - vl) ** 2 : 0) / (2 * g);
+      if (aIdm >= cah) return aIdm;
+      return 0.01 * aIdm + 0.99 * (cah + v.b * Math.tanh((aIdm - cah) / v.b));
+    }
+    record(v) {
+      v.hp = (v.hp + 1) % HB;
+      v.hx[v.hp] = v.x;
+      v.hv[v.hp] = v.v;
+    }
+
+    insert(s) {
+      const lane = s.kind === 'm' ? this.main[s.lane] : this.cross[s.j][s.lane];
+      const v = s.wait[0];
+      let vin = v.v0;
+      if (lane.length) {
+        const last = lane[lane.length - 1];
+        const g = last.x - last.len;
+        if (g < v.s0 + 1) return;
+        vin = Math.min(v.v0, last.v + 1, Math.max(0, (g - v.s0) / v.T));
+      }
+      v.x = 0; v.v = vin; v.moving = vin > 3;
+      v.hx.fill(0); v.hv.fill(vin);
+      lane.push(v);
+      s.wait.shift();
+    }
+
+    timing() {
+      const p = this.p, y = p.amber, r = p.allred, C = p.cycle;
+      const avail = C - 2 * (y + r);
+      const gm = clamp((avail * p.split) / 100, MIN_G, avail - MIN_GC);
+      return { C, y, r, gm, gc: avail - gm };
+    }
+    offset(j, C) {
+      if (this.p.mode === 'wave') return (JX[j] - JX[0]) / ((this.p.vlim / 3.6) * 0.85);
+      return UNCOORD[j] * C;
+    }
+    fixedPhase(j) {
+      const tm = this.timing();
+      let q = (((this.t - this.offset(j, tm.C)) % tm.C) + tm.C) % tm.C;
+      if (q < tm.gm) return 'MG'; q -= tm.gm;
+      if (q < tm.y) return 'MA'; q -= tm.y;
+      if (q < tm.r) return 'R1'; q -= tm.r;
+      if (q < tm.gc) return 'CG'; q -= tm.gc;
+      if (q < tm.y) return 'CA';
+      return 'R2';
+    }
+    // What a junction's detectors see: queues, vehicles about to arrive, and vehicles in the zone where amber would force a hard choice.
+    demandAt(j) {
+      let qm = 0, am = 0, dm = 0, qc = 0, ac = 0, dzm = false, dzc = false, soonm = false, soonc = false;
+      for (const lane of this.main) for (const v of lane) {
+        const d = STOP[j] - v.x;
+        if (d >= -0.5 && d <= 120) {
+          am++;
+          if (v.v < 2) { qm++; if (d < 15) soonm = true; }
+          else { const tt = d / v.v; if (tt < 3) soonm = true; if (tt >= 2 && tt <= 5.5 && v.v > 8) dzm = true; }
+        } else if (v.x - v.len > BOX_OUT[j] && v.x - BOX_OUT[j] < 60 && v.v < 2) dm++;
+      }
+      for (const lane of this.cross[j]) for (const v of lane) {
+        const d = CSTOP - v.x;
+        if (d >= -0.5 && d <= 60) {
+          ac++;
+          if (v.v < 2) { qc++; if (d < 12) soonc = true; }
+          else { const tt = d / v.v; if (tt < 2.5) soonc = true; if (tt >= 2 && tt <= 5 && v.v > 6) dzc = true; }
+        }
+      }
+      return { am, ac, qm, qc, dzm, dzc, soonm, soonc, blocked: dm >= 4 };
+    }
+    // Vehicle-actuated control: hold green while traffic keeps arriving or someone is in the dilemma zone, up to a maximum,
+    // then switch when the other road is waiting. Green also ends early if the queue from the next junction blocks the exit.
+    adaptivePhase(j) {
+      const s = this.sig[j], p = this.p;
+      s.tIn += DT;
+      const to = (ph) => { s.phase = ph; s.tIn = 0; };
+      if (s.phase === 'MG' && s.tIn >= MIN_G) {
+        const d = this.demandAt(j);
+        if (d.ac > 0 && (s.tIn >= MAX_G || d.blocked || (!d.dzm && !d.soonm))) to('MA');
+      } else if (s.phase === 'MA' && s.tIn >= p.amber) to('R1');
+      else if (s.phase === 'R1' && s.tIn >= p.allred) to('CG');
+      else if (s.phase === 'CG' && s.tIn >= MIN_GC) {
+        const d = this.demandAt(j);
+        if (d.am > 0 && (s.tIn >= MAX_GC || (!d.dzc && !d.soonc))) to('CA');
+      } else if (s.phase === 'CA' && s.tIn >= p.amber) to('R2');
+      else if (s.phase === 'R2' && s.tIn >= p.allred) to('MG');
+      return s.phase;
+    }
+    signals(init) {
+      for (let j = 0; j < JX.length; j++) {
+        let ph;
+        if (this.p.mode === 'adaptive') ph = this.adaptivePhase(j);
+        else { ph = this.fixedPhase(j); this.sig[j].phase = ph; }
+        const m = ph === 'MG' ? 'G' : ph === 'MA' ? 'A' : 'R';
+        const c = ph === 'CG' ? 'G' : ph === 'CA' ? 'A' : 'R';
+        if (this.ui && (init || m !== this.ms[j])) {
+          const h = this.hist[j];
+          h.push([this.t, m]);
+          while (h.length > 2 && h[1][0] < this.t - WIN) h.shift();
+        }
+        this.ms[j] = m;
+        this.cs[j] = c;
+      }
+    }
+
+    free(v) { return v.amax * (1 - Math.pow(v.v / v.v0, 4)); }
+    idm(v, s, dv) {
+      const g = Math.max(s, 0.1);
+      const ss = v.s0 + Math.max(0, v.v * v.T + (v.v * dv) / (2 * Math.sqrt(v.amax * v.b)));
+      return v.amax * (1 - Math.pow(v.v / v.v0, 4) - (ss / g) * (ss / g));
+    }
+    // Stopping at a signal: drivers start braking once the deceleration needed reaches a comfortable share of their limit.
+    stopAcc(v, d) {
+      const s = d - 1;
+      if (s <= 0.05) return -Math.min(9, v.v / DT);
+      const thr = 0.7 * v.bComf;
+      const kin = (v.v * v.v) / (2 * s);
+      if (kin >= thr) return -Math.min(9, kin);
+      return Math.min(v.amax, Math.sqrt(2 * thr * s) - v.v);
+    }
+    // At the start of amber each driver decides once: stop if they can within their braking limit after reacting, otherwise go.
+    mustStop(v, state, d, key) {
+      if (state === 'G') { if (key in v.dec) delete v.dec[key]; return false; }
+      let dc = v.dec[key];
+      if (!dc && state === 'A') {
+        const need = v.v * v.tr + (v.v * v.v) / (2 * v.bStop);
+        dc = v.dec[key] = { go: d < need, t: this.t };
+      }
+      if (!dc) return true;
+      if (dc.go) return false;
+      return this.t - dc.t >= v.tr;
+    }
+    nextJ(x) {
+      for (let j = 0; j < STOP.length; j++) if (x <= STOP[j]) return j;
+      return -1;
+    }
+    move(v) {
+      const nv = v.v + v.a * DT;
+      if (nv <= 0) { if (v.a < 0) v.x += (v.v * v.v) / (-2 * v.a); v.v = 0; }
+      else { v.x += (v.v + nv) * 0.5 * DT; v.v = nv; }
+    }
+    mark(kind, v) {
+      if (this.ui) this.events.push({ kind, k: v.kind, lane: v.lane, j: v.j, x: v.x, at: performance.now() });
+    }
+
+    step() {
+      this.signals(false);
+      for (const s of this.streams) {
+        while (this.t >= s.next) { s.wait.push(this.vehicle(s, s.next)); s.next += this.gap(s); }
+        if (s.wait.length) this.insert(s);
+      }
+      // accelerations
+      for (const lane of this.main) {
+        for (let i = 0; i < lane.length; i++) {
+          const v = lane[i];
+          let a = this.free(v);
+          if (i > 0) a = Math.min(a, this.follow(v, lane[i - 1]));
+          const j = this.nextJ(v.x);
+          if (j >= 0) {
+            const d = STOP[j] - v.x;
+            if (d < 300 && this.mustStop(v, this.ms[j], d, j)) a = Math.min(a, this.stopAcc(v, d));
+          }
+          v.a = clamp(a, -9, v.amax);
+        }
+      }
+      for (let j = 0; j < JX.length; j++) {
+        for (const lane of this.cross[j]) {
+          for (let i = 0; i < lane.length; i++) {
+            const v = lane[i];
+            let a = this.free(v);
+            if (i > 0) a = Math.min(a, this.follow(v, lane[i - 1]));
+            if (v.x <= CSTOP && this.mustStop(v, this.cs[j], CSTOP - v.x, 'c')) a = Math.min(a, this.stopAcc(v, CSTOP - v.x));
+            v.a = clamp(a, -9, v.amax);
+          }
+        }
+      }
+      // movement and red-light runs
+      const live = this.t >= this.from;
+      for (const lane of this.main) {
+        for (let i = 0; i < lane.length; i++) {
+          const v = lane[i], x0 = v.x;
+          this.move(v);
+          if (i > 0) { const l = lane[i - 1], lim = l.x - l.len - 0.3; if (v.x > lim) { v.x = lim; v.v = Math.min(v.v, l.v); this.touch++; } }
+          this.record(v);
+          const j = this.nextJ(x0);
+          if (j >= 0 && v.x > STOP[j] && this.ms[j] === 'R' && live) { this.m.red++; this.mark('red', v); }
+        }
+      }
+      for (let j = 0; j < JX.length; j++) {
+        for (const lane of this.cross[j]) {
+          for (let i = 0; i < lane.length; i++) {
+            const v = lane[i], x0 = v.x;
+            this.move(v);
+            if (i > 0) { const l = lane[i - 1], lim = l.x - l.len - 0.3; if (v.x > lim) { v.x = lim; v.v = Math.min(v.v, l.v); this.touch++; } }
+            this.record(v);
+            if (x0 <= CSTOP && v.x > CSTOP && this.cs[j] === 'R' && live) { this.m.red++; this.mark('red', v); }
+          }
+        }
+      }
+      for (const lane of this.main) this.measure(lane, live, L);
+      for (const pair of this.cross) for (const lane of pair) this.measure(lane, live, CROSS_LEN);
+      this.sideImpacts(live);
+      this.t += DT;
+      if (this.ui) this.sampleTrails();
+    }
+
+    measure(lane, live, pathLen) {
+      for (let i = 0; i < lane.length; i++) {
+        const v = lane[i];
+        if (v.v < 0.5) { if (v.moving) { v.moving = false; v.stops++; } }
+        else if (v.v > 3) v.moving = true;
+        if (v.a < -HARD) { if (!v.hardOn) { v.hardOn = true; if (live) { this.m.hard++; this.mark('hard', v); } } }
+        else if (v.a > -HARD + 0.5) v.hardOn = false;
+        if (i > 0) {
+          const l = lane[i - 1], cv = v.v - l.v, g = l.x - l.len - v.x;
+          if (cv > CLOSE_MIN && g < TTC_MIN * cv) {
+            if (!v.rearOn) { v.rearOn = true; if (live) { this.m.rear++; this.mark('rear', v); } }
+          } else if (cv < CLOSE_MIN * 0.5 || g > (TTC_MIN + 0.5) * cv) v.rearOn = false;
+        }
+      }
+      while (lane.length && lane[0].x - lane[0].len > pathLen) {
+        const v = lane.shift();
+        if (live) {
+          this.m.veh++;
+          this.m.delay += Math.max(0, this.t - v.born - pathLen / v.v0);
+          this.m.stops += v.stops;
+        }
+        if (v.trail) { v.trail.push(this.t, L); this.trails.push({ p: v.trail, end: this.t }); }
+      }
+    }
+
+    sideImpacts(live) {
+      for (let j = 0; j < JX.length; j++) {
+        const inside = [];
+        for (const lane of this.main) for (const v of lane) if (v.x > BOX_IN[j] && v.x - v.len < BOX_OUT[j]) inside.push(v);
+        if (!inside.length) continue;
+        for (const lane of this.cross[j]) {
+          for (const c of lane) {
+            if (c.x > CL && c.x - c.len < CL + MW) {
+              for (const v of inside) {
+                const key = v.id * 1e6 + c.id;
+                if (!this.pairs.has(key)) { this.pairs.add(key); if (live) { this.m.side++; this.mark('side', c); } }
+              }
+            }
+          }
+        }
+      }
+      if (this.pairs.size > 20000) this.pairs.clear();
+    }
+
+    sampleTrails() {
+      const s = Math.floor(this.t);
+      if (s === this.sample) return;
+      this.sample = s;
+      for (const lane of this.main) for (const v of lane) v.trail.push(this.t, v.x);
+      while (this.trails.length && this.trails[0].end < this.t - WIN) this.trails.shift();
+    }
+
+    stats() {
+      const span = this.t - this.from, h = Math.max(span, 1e-9) / 3600, m = this.m, n = Math.max(1, m.veh);
+      return { ready: span >= 30 && m.veh >= 5, span, veh: m.veh, touch: this.touch, delay: m.delay / n, stops: m.stops / n,
+        rear: m.rear / h, hard: m.hard / h, red: m.red / h, side: m.side / h };
+    }
+  }
+
+  // ---------------------------------------------------------------- page
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const road = $('road'), ts = $('ts');
+  let sim, seed = 20261123, playing = !reduce, speed = 4, tok = {};
+
+  function params() {
+    return {
+      mode: document.querySelector('input[name="mode"]:checked').value,
+      demand: +$('demand').value, cross: +$('cross').value, cycle: +$('cycle').value, split: +$('split').value,
+      amber: +$('amber').value, allred: +$('allred').value, vlim: +$('vlim').value,
+    };
+  }
+  function build() {
+    sim = new Sim(params(), seed, true);
+    for (let i = 0; i < 3300; i++) sim.step();   // fill the road and the diagram before the first frame
+    readout();
+  }
+  function labels() {
+    const p = params();
+    $('demand-o').textContent = `${p.demand} vehicles/h per lane`;
+    $('cross-o').textContent = `${p.cross} vehicles/h each way`;
+    $('cycle-o').textContent = `${p.cycle} s`;
+    $('split-o').textContent = `${p.split}%`;
+    $('amber-o').textContent = `${p.amber.toFixed(1)} s`;
+    $('allred-o').textContent = `${p.allred.toFixed(1)} s`;
+    const guide = 1 + p.vlim / 3.6 / 6;
+    $('amber-hint').textContent = `The usual guide at ${p.vlim} km/h is ${guide.toFixed(1)} s, from a 1 s reaction and braking at 3 m/s².`;
+    const hints = {
+      fixed: `Each junction runs its own ${p.cycle} s cycle with no link to its neighbours.`,
+      wave: `Every junction runs a ${p.cycle} s cycle, offset so traffic at about ${Math.round(p.vlim * 0.85)} km/h meets green at each one.`,
+      adaptive: 'Each junction gives green to the road with the longer waiting queue, within minimum and maximum green times. An RL agent per junction would replace this rule.',
+    };
+    $('mode-hint').textContent = hints[p.mode];
+    document.querySelectorAll('.ctl.timing').forEach((el) => {
+      el.classList.toggle('off', p.mode === 'adaptive');
+      el.querySelector('input').disabled = p.mode === 'adaptive';
+    });
+  }
+  const mmss = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  function readout() {
+    const s = sim.stats();
+    const f = (x, d) => (s.ready ? x.toFixed(d) : '–');
+    $('s-delay').textContent = f(s.delay, 1);
+    $('s-stops').textContent = f(s.stops, 2);
+    $('s-rear').textContent = f(s.rear, 0);
+    $('s-hard').textContent = f(s.hard, 0);
+    $('s-red').textContent = f(s.red, 0);
+    $('s-side').textContent = f(s.side, 0);
+    $('warm').textContent = s.ready
+      ? `Measured over ${Math.max(1, Math.round(s.span / 60))} simulated minutes and ${s.veh.toLocaleString()} vehicles.`
+      : 'Measuring. Counts start one simulated minute after a change, once traffic has settled.';
+    $('clock').textContent = `Simulated time ${mmss(sim.t)}`;
+  }
+
+  function readTokens() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ['road', 'verge', 'mark', 'car', 'queue', 'sig-g', 'sig-a', 'sig-r', 'trail', 'grid', 'text', 'muted', 'surface', 'red']) tok[k] = cs.getPropertyValue(`--${k}`).trim();
+  }
+  function fit(c) {
+    const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [ctx, w, h];
+  }
+  const sigColor = (s) => (s === 'G' ? tok['sig-g'] : s === 'A' ? tok['sig-a'] : tok['sig-r']);
+  const FONT = 'Overpass, system-ui, -apple-system, "Segoe UI", sans-serif';
+
+  function drawRoad() {
+    const [ctx, W, H] = fit(road);
+    const padX = 18, sx = (W - 2 * padX) / L, X = (m) => padX + m * sx;
+    const ym = Math.round(H / 2), LH = 10, top = 16, sy = (ym - LH - top) / CL, CWp = CW * sx;
+    const yN = (s) => (s <= CL ? ym + LH + (CL - s) * sy : s < CL + MW ? ym + LH - ((s - CL) / MW) * 2 * LH : ym - LH - (s - CL - MW) * sy);
+    const yS = (s) => 2 * ym - yN(s);
+    ctx.fillStyle = tok.verge; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = tok.road;
+    for (const jx of JX) ctx.fillRect(X(jx) - CWp / 2, top, CWp, H - 2 * top);
+    ctx.fillRect(0, ym - LH, W, 2 * LH);
+    // markings
+    ctx.strokeStyle = tok.mark; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.moveTo(0, ym + 0.5); ctx.lineTo(W, ym + 0.5);
+    for (const jx of JX) { const x = Math.round(X(jx)) + 0.5; ctx.moveTo(x, top); ctx.lineTo(x, ym - LH); ctx.moveTo(x, ym + LH); ctx.lineTo(x, H - top); }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.85;
+    ctx.fillStyle = tok.mark;
+    for (let j = 0; j < JX.length; j++) {
+      const cx = X(JX[j]);
+      ctx.fillRect(X(STOP[j]) - 1, ym - LH, 2, 2 * LH);
+      ctx.fillRect(cx - CWp / 2, yN(CSTOP) - 1, CWp / 2, 2);
+      ctx.fillRect(cx, yS(CSTOP) - 1, CWp / 2, 2);
+    }
+    ctx.globalAlpha = 0.45;
+    for (const m of [40, 140]) for (let k = 0; k < 2; k++) {   // lane arrows
+      const x = X(m), y = ym - LH / 2 + k * LH;
+      ctx.beginPath(); ctx.moveTo(x + 7, y); ctx.lineTo(x, y - 3); ctx.lineTo(x, y + 3); ctx.closePath(); ctx.fill(); ctx.fillRect(x - 8, y - 0.75, 8, 1.5);
+    }
+    ctx.globalAlpha = 1;
+    // vehicles
+    for (let k = 0; k < 2; k++) {
+      const yc = ym - LH / 2 + k * LH;
+      for (const v of sim.main[k]) {
+        const x1 = X(v.x), x0 = Math.min(x1 - 2.5, X(v.x - v.len)), hh = v.bus ? 7 : 6;
+        ctx.fillStyle = v.v < 1 ? tok.queue : tok.car;
+        ctx.fillRect(x0, yc - hh / 2, x1 - x0, hh);
+      }
+    }
+    const lw = CWp / 2, cw = clamp(lw - 2, 3, 6);
+    JX.forEach((jx, j) => {
+      const cx = X(jx);
+      sim.cross[j].forEach((lane, d) => {
+        const xc = d === 0 ? cx - lw / 2 : cx + lw / 2, yf = d === 0 ? yN : yS;
+        for (const v of lane) {
+          const a = yf(v.x), b = yf(v.x - v.len), y0 = Math.min(a, b), y1 = Math.max(a, b);
+          ctx.fillStyle = v.v < 1 ? tok.queue : tok.car;
+          ctx.fillRect(xc - cw / 2, Math.min(y0, y1 - 2.5), cw, Math.max(2.5, y1 - y0));
+        }
+      });
+    });
+    // signal heads
+    for (let j = 0; j < JX.length; j++) {
+      const cx = X(JX[j]);
+      head(ctx, X(STOP[j]) - 5, ym - LH - 8, sim.ms[j]);
+      head(ctx, cx - CWp / 2 - 7, yN(CSTOP) + 6, sim.cs[j]);
+      head(ctx, cx + CWp / 2 + 7, yS(CSTOP) - 6, sim.cs[j]);
+    }
+    // events
+    const now = performance.now();
+    sim.events = sim.events.filter((e) => now - e.at < 1400);
+    ctx.lineWidth = 2;
+    for (const e of sim.events) {
+      const k = (now - e.at) / 1400;
+      let x, y;
+      if (e.k === 'm') { x = X(e.x); y = ym - LH / 2 + e.lane * LH; }
+      else { x = X(JX[e.j]) + (e.lane === 0 ? -lw / 2 : lw / 2); y = (e.lane === 0 ? yN : yS)(e.x); }
+      ctx.strokeStyle = e.kind === 'hard' ? tok['sig-a'] : tok['sig-r'];
+      ctx.globalAlpha = 1 - k;
+      ctx.beginPath(); ctx.arc(x, y, (e.kind === 'hard' ? 3 : 5) + 10 * k, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // labels and the speed-limit sign
+    ctx.font = `600 12px ${FONT}`; ctx.fillStyle = tok.muted; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    JX.forEach((jx, j) => ctx.fillText(`J${j + 1}`, X(jx) + CWp / 2 + 6, H - top + 4));
+    ctx.textAlign = 'center'; ctx.font = `400 11px ${FONT}`;
+    for (let j = 0; j + 1 < JX.length; j++) ctx.fillText(`${JX[j + 1] - JX[j]} m`, (X(JX[j]) + X(JX[j + 1])) / 2, ym + LH + 16);
+    const rx = padX + 14, ry = ym - LH - 22;
+    ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#C8261D'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(rx, ry, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1D2125'; ctx.font = `800 10px ${FONT}`; ctx.textBaseline = 'middle';
+    ctx.fillText(String(sim.p.vlim), rx, ry + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+  function head(ctx, x, y, state) {
+    ctx.fillStyle = 'rgba(0,0,0,.55)';
+    ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = sigColor(state);
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawTS() {
+    const [ctx, W, H] = fit(ts);
+    const pl = 36, pr = 10, pt = 10, pb = 24, t1 = sim.t, t0 = t1 - WIN;
+    const X = (t) => pl + ((t - t0) / WIN) * (W - pl - pr);
+    const Y = (x) => pt + (1 - x / L) * (H - pt - pb);
+    ctx.fillStyle = tok.surface; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = tok.grid; ctx.lineWidth = 1; ctx.beginPath();
+    for (let m = Math.ceil(t0 / 60) * 60; m <= t1; m += 60) { const x = Math.round(X(m)) + 0.5; ctx.moveTo(x, pt); ctx.lineTo(x, H - pb); }
+    ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(pl, pt, W - pl - pr, H - pt - pb); ctx.clip();
+    ctx.strokeStyle = tok.trail; ctx.lineWidth = 1; ctx.beginPath();
+    const path = (p) => {
+      let on = false;
+      for (let i = 0; i < p.length; i += 2) {
+        if (p[i] < t0 - 2) continue;
+        const x = X(p[i]), y = Y(p[i + 1]);
+        if (on) ctx.lineTo(x, y); else { ctx.moveTo(x, y); on = true; }
+      }
+    };
+    for (const tr of sim.trails) path(tr.p);
+    for (const lane of sim.main) for (const v of lane) { path(v.trail); }
+    ctx.stroke();
+    for (let j = 0; j < JX.length; j++) {
+      const y = Y(STOP[j]), h = sim.hist[j];
+      for (let i = 0; i < h.length; i++) {
+        const a = Math.max(h[i][0], t0), b = i + 1 < h.length ? h[i + 1][0] : t1;
+        if (b <= t0) continue;
+        ctx.fillStyle = sigColor(h[i][1]);
+        ctx.fillRect(X(a), y - 3, Math.max(1, X(b) - X(a)), 6);
+      }
+    }
+    ctx.restore();
+    ctx.fillStyle = tok.muted; ctx.font = `600 11px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let j = 0; j < JX.length; j++) ctx.fillText(`J${j + 1}`, pl - 8, Y(STOP[j]));
+    ctx.textBaseline = 'alphabetic'; ctx.font = `400 11px ${FONT}`;
+    ctx.textAlign = 'left'; ctx.fillText('5 min ago', pl, H - 7);
+    ctx.textAlign = 'right'; ctx.fillText('now', W - pr, H - 7);
+  }
+
+  let acc = 0, last = performance.now(), frame = 0;
+  function loop(now) {
+    const dt = Math.min(0.25, (now - last) / 1000);
+    last = now;
+    if (playing) {
+      acc += dt * speed;
+      let n = 0;
+      while (acc >= DT && n < 400) { sim.step(); acc -= DT; n++; }
+      if (n >= 400) acc = 0;
+    }
+    drawRoad();
+    if (frame % 2 === 0) drawTS();
+    if (frame % 12 === 0) readout();
+    frame++;
+    requestAnimationFrame(loop);
+  }
+
+  // comparison: same arrivals, each control mode, 30 simulated minutes after a two-minute warm-up
+  async function compare() {
+    const btn = $('run'), status = $('run-status');
+    btn.disabled = true;
+    const p = params(), rows = [];
+    for (const mode of ['fixed', 'wave', 'adaptive']) {
+      status.textContent = `Running ${NAMES[mode].toLowerCase()}…`;
+      const s = new Sim({ ...p, mode }, 7351, false);
+      const end = 120 + 1800;
+      while (s.t < end) {
+        const stop = Math.min(end, s.t + 150);
+        while (s.t < stop) s.step();
+        await new Promise((r) => setTimeout(r, 0));
+      }
+      rows.push({ mode, ...s.stats() });
+    }
+    const cols = [['delay', 1], ['stops', 2], ['rear', 0], ['hard', 0], ['red', 0], ['side', 0]];
+    const body = $('cmp-body');
+    body.textContent = '';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      const th = document.createElement('td'); th.textContent = NAMES[r.mode]; tr.appendChild(th);
+      for (const [k, d] of cols) {
+        const max = Math.max(...rows.map((x) => x[k])), min = Math.min(...rows.map((x) => x[k]));
+        const td = document.createElement('td'); td.className = 'num';
+        if (max > 0 && r[k] === min) td.classList.add('best');
+        const bar = document.createElement('span'); bar.className = 'bar'; bar.style.setProperty('--w', `${max > 0 ? (100 * r[k]) / max : 0}%`);
+        td.appendChild(bar); td.appendChild(document.createTextNode(r[k].toFixed(d)));
+        tr.appendChild(td);
+      }
+      body.appendChild(tr);
+    }
+    $('cmp').hidden = false;
+    status.textContent = `Done. Each run served about ${Math.round(rows[0].veh / 10) * 10} vehicles.`;
+    btn.disabled = false;
+    window.__lastCompare = rows;
+  }
+
+  // wiring
+  ['demand', 'cross', 'cycle', 'split', 'amber', 'allred', 'vlim'].forEach((id) => {
+    $(id).addEventListener('input', () => { labels(); sim.p = params(); sim.resetCounts(60); readout(); });
+  });
+  document.querySelectorAll('input[name="mode"]').forEach((el) => el.addEventListener('change', () => { labels(); build(); }));
+  $('play').addEventListener('click', () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; });
+  $('speed').addEventListener('change', () => { speed = +$('speed').value; });
+  $('reset').addEventListener('click', () => { seed = (seed * 48271) % 2147483647; build(); });
+  $('run').addEventListener('click', compare);
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', readTokens);
+  new MutationObserver(readTokens).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  readTokens();
+  labels();
+  $('play').textContent = playing ? 'Pause' : 'Play';
+  build();
+  requestAnimationFrame(loop);
+  window.__Sim = Sim;
+})();
+</script>
+</body>
+</html>

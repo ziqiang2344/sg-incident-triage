@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Rare incident labels from traffic cameras</title>
+<style>
+@page { size:A4; margin:15mm 15mm 13mm; }
+body { font:9.6pt/1.42 "Helvetica Neue", Arial, sans-serif; color:#1D2125; margin:0; }
+h1 { font-size:17pt; line-height:1.15; margin:0 0 2mm; } h2 { font-size:11pt; color:#006B3F; margin:4.5mm 0 1.5mm; }
+p { margin:0 0 2mm; } .sub { color:#5B646B; } .result { font-weight:700; font-size:11pt; }
+table { border-collapse:collapse; width:100%; font-size:9pt; margin:1mm 0 2mm; }
+th, td { border-bottom:1px solid #C5CBCF; padding:1.2mm 1.5mm; text-align:left; } th { color:#5B646B; font-weight:600; }
+td.num, th.num { text-align:right; }
+.tiles { display:grid; grid-template-columns:repeat(47,1fr); gap:1.6px; margin:2mm 0 1mm; }
+.tiles i { display:block; aspect-ratio:16/9; background:#DCE1E3; } .tiles i.flag { background:#fff; box-shadow:inset 0 0 0 1.2px #D22B22; }
+.tiles i.hit { background:#D22B22; } .key { font-size:8pt; color:#5B646B; }
+.imgs { display:grid; grid-template-columns:1fr 1fr 1fr; gap:3mm; margin:2mm 0; } .imgs img { width:100%; display:block; }
+.cap { font-size:8pt; color:#5B646B; margin-top:1mm; }
+ol, ul { margin:0 0 2mm; padding-left:5mm; } li { margin:.7mm 0; } .page { page-break-after:always; }
+</style></head><body>
+<div class="page">
+<h1>What it takes to label rare traffic incidents from camera data</h1>
+<p class="sub">A weekend test on 21,885 real frames from LTA's 90 expressway cameras. Lim Zi Qiang.</p>
+<h2>Question</h2>
+<p>Incident labels are rare. Can a cheap pipeline find them in camera data: rank frames with signals that need no labels, let a vision-language model check the candidates, and confirm by hand?</p>
+<h2>Result</h2>
+<p class="result">1 of 235 frames I labelled showed an incident. The model flagged 32; none held up.</p>
+<div class="tiles"><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="hit"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class="flag"></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class="flag"></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class="flag"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class="flag"></i></div>
+<p class="key">Each tile is one labelled frame. Filled red: incident. Red outline: the model said incident.</p>
+<ul>
+<li><b>The cameras didn't see the crashes.</b> None of the 9 crashes reported within 1 km of a camera was visible 1 and 10 minutes after the report (0 of 28 frames): they were out of the camera's view, not between snapshots. The random sample had none either (0 of 80; 95% interval 0 to 4.6%).</li>
+<li><b>An off-the-shelf model over-flags.</b> Qwen3-VL 32B flagged 32 frames, none correct (95% interval 0 to 11%), and missed the one real incident. It read motion blur as an overturned car, brake lights as stopped vehicles and checkpoint queues as incidents.</li>
+<li><b>The response shows even when the crash doesn't.</b> In three reported crashes, later frames show police, SCDF or recovery vehicles with lights on in the resulting queue.</li>
+</ul>
+<table><tr><th>Frames reviewed</th><th class="num">Frames</th><th class="num">Incidents</th></tr><tr><td>Random sample</td><td class='num'>80</td><td class='num'>0</td></tr><tr><td>Frames at the reported crashes</td><td class='num'>28</td><td class='num'>0</td></tr><tr><td>Image novelty, top 50 windows</td><td class='num'>50</td><td class='num'>1</td></tr><tr><td>CLIP zero-shot, top 50 windows</td><td class='num'>50</td><td class='num'>0</td></tr><tr><td>Both combined, top 50 windows</td><td class='num'>50</td><td class='num'>0</td></tr><tr><td>Flagged by the model</td><td class='num'>32</td><td class='num'>0</td></tr></table>
+<div class="imgs">
+<div><img src="img/3797_20250902070112.jpg"><div class="cap">Model: “a vehicle is overturned and emitting red smoke or flames in the center lanes, indicating a collision.” On review: It is a car&#x27;s tail lights, smeared by the camera&#x27;s exposure. Traffic is moving normally.</div></div>
+<div><img src="img/6705_20260530082122.jpg"><div class="cap">Crash reported 08:20 on the PIE towards Tuas, before the Adam Road exit (5 cars, 1 motorcycle). Nearest camera, 1 minute later.</div></div>
+<div><img src="img/1702_20260106192148.jpg"><div class="cap">CTE near Braddell, 1 minute after a four-car collision was reported towards SLE. Police lights on the right; the SLE-bound side is jammed.</div></div>
+</div>
+</div>
+<h2>What I would build instead</h2>
+<p>The ranking and the model both need work, but the first problem is coverage: the cameras see a small part of the road, and most incidents happen out of their view. So turn the order around:</p>
+<ol>
+<li>Find where and when to look from a signal that covers every road, all the time: speed bands, loop detectors, the incident feed.</li>
+<li>Pull 30 to 60 seconds of video from the nearest cameras rather than single stills; stopped vehicles and responders are clear in motion and ambiguous in one frame.</li>
+<li>Measure the model's precision on a small labelled set before trusting it, and point it at the cues seen here: vehicles that don't move, and emergency or recovery vehicles.</li>
+<li>Send the rest to a person; confirmed labels retrain the cheap ranker, so each pass needs fewer human checks.</li>
+</ol>
+<h2>Method</h2>
+<ul>
+<li><b>Frames.</b> LTA has published live images for only 8 cameras since mid-2026; data.gov.sg keeps the history of all 90. For 10 crashes reported in the news (Feb 2025 to May 2026): every camera every 5 minutes from 20 minutes before to 40 minutes after, plus the same hour a week earlier as a control.</li>
+<li><b>Rankings.</b> Image novelty (CLIP embedding distance to the same camera's other frames, ignoring those within 45 minutes), CLIP zero-shot similarity to incident descriptions, and both combined. The top 50 camera-time windows from each, 80 random frames and 28 frames at the reported crashes formed a shuffled review set of 235. The one incident was ranked #28 by image novelty.</li>
+<li><b>Labels.</b> One labeller (me), blind to rankings and model output. Incident: a crash, a stopped or broken-down vehicle, debris, responders attending, or people on the carriageway; congestion alone is not.</li>
+<li><b>Model.</b> Qwen3-VL 32B via NUS SoC's API, temperature 0, fixed JSON reply with an abstain option, about 6 s per frame.</li>
+</ul>
+<h2>Limits</h2>
+<ul>
+<li>235 frames and 10 crashes: enough to show the pattern, not to rank models precisely.</li>
+<li>One labeller; single frames 5 minutes apart; some incidents are only clear on video.</li>
+<li>One general-purpose model and prompt, untuned: the lesson is to measure before trusting, not that VLMs cannot do this.</li>
+<li>Public cameras only, one still every few minutes; video would show far more. No speed or loop data: it exists only live.</li>
+</ul>
+<p class="cap">Independent prototype, not affiliated with LTA. Images: LTA via data.gov.sg, Singapore Open Data Licence.</p>
+</body></html>

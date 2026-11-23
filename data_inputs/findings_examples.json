@@ -1,0 +1,23 @@
+{
+  "_note": "Frames shown on the findings page. 'on_review' is my reading of each frame after labelling; the VLM's words are quoted from vlm_cache.jsonl.",
+  "hero": {"review_id": "R0158", "on_review": "It is a car's tail lights, smeared by the camera's exposure. Traffic is moving normally."},
+  "not_in_view": [
+    {"review_id": "R0132", "caption": "Crash reported 08:20 on the PIE towards Tuas, before the Adam Road exit (5 cars, 1 motorcycle). Nearest camera, 1 minute later."},
+    {"review_id": "R0009", "caption": "Bus fire reported 11:45 on the PIE towards Tuas, before the Clementi Road exit. Nearest camera, 2 minutes later."},
+    {"review_id": "R0014", "caption": "14-vehicle chain collision reported 21:50 on the PIE towards Changi, after the Jalan Eunos exit. Nearest camera, 2 minutes later."},
+    {"review_id": "R0209", "caption": "Fatal crash reported 18:45 on the AYE towards Tuas, after the South Buona Vista Road exit. Camera 390 m away, 2 minutes later."}
+  ],
+  "vlm_errors": [
+    {"review_id": "R0119", "on_review": "A tipper truck passing right under a tunnel camera. Nothing is stopped.", "pattern": "Close-up read as stopped"},
+    {"review_id": "R0208", "on_review": "The evening queue on the Causeway towards Johor: normal for that hour.", "pattern": "Congestion read as an incident"},
+    {"review_id": "R0004", "on_review": "Both trucks are travelling with the traffic around them.", "pattern": "Moving heavy vehicles read as stopped"},
+    {"review_id": "R0100", "on_review": "A bus and a truck turning through a signalised junction; no contact is visible.", "pattern": "Close vehicles read as a collision"},
+    {"review_id": "R0076", "on_review": "A low-resolution dawn frame of a car braking in moving traffic.", "pattern": "Brake lights read as stopped"}
+  ],
+  "response": [
+    {"review_id": "R0198", "caption": "CTE near Braddell, 1 minute after a four-car collision was reported towards SLE. Police lights on the right; the SLE-bound side is jammed."},
+    {"review_id": "R0051", "caption": "SLE, 11 minutes after a five-vehicle crash was reported towards BKE. A recovery vehicle in the queue; the BKE-bound carriageway is almost empty."},
+    {"review_id": "R0041", "caption": "AYE towards Tuas, 31 minutes after a fatal crash was reported 390 m away. An SCDF vehicle with lights on in the queue. Surfaced by the image-novelty ranking (#43)."}
+  ],
+  "found": {"review_id": "R0065", "caption": "Two motorcyclists stopped on the BKE shoulder, 23 May 2026 08:41. No news report: a control window. Surfaced by the image-novelty ranking at #28; the model said no incident."}
+}

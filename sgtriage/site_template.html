@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rare incident triage for Singapore traffic cameras</title>
+<meta name="description" content="Ranking camera frames with speed and image signals, checking the top candidates with a vision-language model, and measuring the result against human labels.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+:root {
+  --bg: #F1F3F2; --surface: #FFFFFF; --text: #1D2125; --muted: #5B646B; --rule: #C5CBCF;
+  --green: #006B3F; --red: #D22B22; --amber: #E9A100; --tile: #DCE1E3;
+  --measure: 70ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181B; --surface: #1E2226; --text: #E5E8EA; --muted: #A0A9B0; --rule: #384047;
+    --green: #39A86B; --red: #FF5B4F; --amber: #FFC23D; --tile: #2C3237;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181B; --surface: #1E2226; --text: #E5E8EA; --muted: #A0A9B0; --rule: #384047;
+  --green: #39A86B; --red: #FF5B4F; --amber: #FFC23D; --tile: #2C3237;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 400 16px/1.55 "Overpass", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums; }
+a { color: var(--green); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; border-radius: 2px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+header.top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 18px 0;
+  border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+header.top .name { font-weight: 800; letter-spacing: .01em; }
+header.top nav { display: flex; gap: 18px; font-size: 15px; }
+section { padding: 40px 0; border-bottom: 1px solid var(--rule); }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.08; font-weight: 800; margin: 0 0 16px; letter-spacing: -.01em; max-width: 18ch; }
+h2 { font-size: 24px; line-height: 1.2; font-weight: 800; margin: 0 0 12px; }
+h3 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+p { margin: 0 0 12px; max-width: var(--measure); }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+.hero { display: grid; grid-template-columns: 1fr 1.15fr; gap: 32px; align-items: start; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+.lede { font-size: 18px; }
+figure { margin: 0; }
+.frame { position: relative; background: #000; border-radius: 4px; overflow: hidden; }
+.frame img { display: block; width: 100%; height: auto; }
+.frame .stamp { position: absolute; left: 0; bottom: 0; right: 0; padding: 6px 10px; font-size: 13px; color: #fff;
+  background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,0)); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: var(--measure); }
+figcaption b { color: var(--text); font-weight: 600; }
+
+/* the contact sheet: 100 reviewed frames per strategy */
+.sheets { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 8px; }
+@media (max-width: 760px) { .sheets { grid-template-columns: 1fr; } }
+.sheet h3 { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.sheet h3 .n { font-weight: 800; font-size: 28px; }
+.tiles { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; margin: 10px 0 6px; }
+.tiles i { display: block; aspect-ratio: 16 / 9; background: var(--tile); border-radius: 1px; }
+.tiles i.hit { background: var(--red); }
+.tiles i.unc { background: var(--amber); }
+.key { display: flex; gap: 16px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.key span::before { content: ""; display: inline-block; width: 14px; height: 8px; margin-right: 6px; vertical-align: middle; background: var(--tile); }
+.key .k-hit::before { background: var(--red); }
+.key .k-unc::before { background: var(--amber); }
+
+/* method: a real sequence, so numbered */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 16px; counter-reset: s; }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+.steps > div { border-top: 3px solid var(--green); padding-top: 12px; }
+.steps > div::before { counter-increment: s; content: counter(s); font-weight: 800; font-size: 28px; color: var(--green); display: block; line-height: 1; margin-bottom: 8px; }
+.steps p { font-size: 15px; }
+
+table { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 12px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+th { font-weight: 600; color: var(--muted); font-size: 14px; }
+td.num { white-space: nowrap; }
+tr.best td:first-child { font-weight: 600; }
+.whisker { width: 160px; }
+@media (max-width: 640px) { .whisker, th.whisker { display: none; } .hide-sm { display: none; } }
+.tablewrap { overflow-x: auto; }
+
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 16px 0; }
+.tabs button { font: inherit; font-size: 15px; padding: 8px 12px; border: 1px solid var(--rule); background: var(--surface);
+  color: var(--text); border-radius: 4px; cursor: pointer; }
+.tabs button[aria-selected="true"] { border-color: var(--green); box-shadow: inset 0 -3px 0 var(--green); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.gallery figcaption { font-size: 13px; }
+.pair { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.empty { color: var(--muted); font-size: 15px; }
+
+#map { height: 420px; border-radius: 4px; border: 1px solid var(--rule); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+ul.plain { margin: 0; padding-left: 18px; max-width: var(--measure); }
+ul.plain li { margin: 6px 0; }
+footer { padding: 28px 0 48px; font-size: 14px; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .tiles i.hit { animation: in .5s ease-out both; animation-delay: calc(var(--d) * 12ms); }
+  @keyframes in { from { opacity: 0; } to { opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="name">Rare incident triage</span>
+    <nav>
+      <a href="#results">Results</a>
+      <a href="#examples">Examples</a>
+      <a id="repoLink" href="#">Code</a>
+      <a id="pdfLink" href="report.pdf">Report (PDF)</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <h1>Finding rare traffic incidents without reviewing every frame</h1>
+      <p class="lede" id="lede"></p>
+      <p class="muted small" id="scope"></p>
+    </div>
+    <figure id="heroFig"></figure>
+  </section>
+
+  <section id="sheets">
+    <h2>What 100 reviewed frames get you</h2>
+    <p id="sheetIntro"></p>
+    <div class="sheets" id="sheetGrid"></div>
+    <div class="key"><span class="k-hit">incident confirmed by a person</span><span>no incident</span></div>
+  </section>
+
+  <section id="method">
+    <h2>How it works</h2>
+    <p>Each stage is cheaper than the next and passes on fewer frames.</p>
+    <div class="steps">
+      <div><h3>Rank every frame</h3><p>Signals that need no labels score each camera frame: how unlike it is to the same camera at other times, and how close CLIP puts it to descriptions of incidents. Road speed data can add a second, independent signal; it is not part of this test.</p></div>
+      <div><h3>Check the top candidates with a VLM</h3><p>A vision-language model sees the frame and the one before it, nothing else, and answers in a fixed format: incident or not, type, confidence, evidence. It may say it can't tell. It never sees the incident reports.</p></div>
+      <div><h3>A person confirms</h3><p>Labels are collected blind: the labelling page shows only the frames, in random order, with no scores or verdicts. Known incident reports are used to check what the ranking misses.</p></div>
+    </div>
+  </section>
+
+  <section id="results">
+    <h2>Results</h2>
+    <p id="resultsIntro"></p>
+    <div class="tablewrap"><table id="resTable"></table></div>
+    <p class="muted small" id="resultsNote"></p>
+    <div id="vlmBlock"></div>
+  </section>
+
+  <section id="examples">
+    <h2>Examples</h2>
+    <p>Real frames from the review set. Every frame here was labelled by a person before the VLM's answer was looked at.</p>
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="gallery" id="gallery" role="tabpanel"></div>
+  </section>
+
+  <section id="where">
+    <h2>Where incidents were reported</h2>
+    <p id="mapIntro"></p>
+    <div id="map" role="img" aria-label="Map of cameras and reported incidents"></div>
+    <div class="key" style="margin-top:8px"><span class="k-hit">reported incident</span><span>camera</span></div>
+  </section>
+
+  <section class="cols" id="limits">
+    <div>
+      <h2>Limits</h2>
+      <ul class="plain" id="limitsList"></ul>
+    </div>
+    <div>
+      <h2>Next: signalised junctions</h2>
+      <p>The public cameras watch expressways, which have no traffic lights. The same pipeline would run on junction CCTV, where the labels that matter are conflicts and near-misses, which are far more frequent than crashes.</p>
+      <ul class="plain">
+        <li>Rank junction frames by unusual vehicle and pedestrian paths, check candidates with the VLM, confirm with a person.</li>
+        <li>Relate confirmed conflicts to signal timing using LTA's on-request <i>Traffic Lights Traffic Plans</i> and <i>Indicative Traffic Counts at Junctions by Loop Detectors</i>.</li>
+        <li id="junctionLine"></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <p id="credit"></p>
+    <p>Independent prototype, not affiliated with or endorsed by the Land Transport Authority. Data: LTA DataMall and data.gov.sg, under the <a href="https://data.gov.sg/open-data-licence">Singapore Open Data Licence</a>. Map: © OpenStreetMap contributors.</p>
+  </footer>
+</div>
+
+<script id="data" type="application/json">/*DATA*/</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const $ = id => document.getElementById(id);
+const pct = (x, d = 0) => (x == null || isNaN(x)) ? '–' : (100 * x).toFixed(d) + '%';
+const per100 = x => (x == null || isNaN(x)) ? '–' : (100 * x).toFixed(x < 0.1 ? 1 : 0);
+const NAMES = {random: 'Random order', speed: 'Speed drop only', novelty: 'Image novelty only',
+  zeroshot: 'CLIP zero-shot only', fused: 'Fused, no labels', learned: 'Learned from the feed'};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtTime = s => { const d = new Date(s); return isNaN(d) ? s : d.toLocaleString('en-SG', {weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Singapore'}); };
+
+if (D.repo_url) $('repoLink').href = D.repo_url; else $('repoLink').remove();
+if (!D.has_pdf) $('pdfLink').remove();
+$('credit').innerHTML = D.author ? `Built by ${esc(D.author)}${D.author_url ? ` (<a href="${esc(D.author_url)}">${esc(D.author_url.replace(/^https?:\/\//, ''))}</a>)` : ''}.` : '';
+
+const M = D.metrics, C = M.counts, P = M.prevalence || {}, best = M.best_method;
+const bp = best && M.precision[best] && M.precision[best]['25'];
+// ---- hero
+$('lede').textContent = (P.n && bp)
+  ? `In a random sample of ${P.n} camera frames, ${P.k} showed an incident. Ranked by this pipeline, ${bp.k} of the top ${bp.n} did. A person reviewing frames finds incidents about ${bp.lift ? Math.round(bp.lift) : '–'} times faster.`
+  : 'Labels are still being collected; the numbers below will fill in once they are.';
+$('scope').textContent = M.kind === 'history'
+  ? `${C.frames.toLocaleString()} real frames from ${C.cameras} LTA expressway cameras: ${C.incident_windows || ''} hour-long windows around news-reported crashes, plus the same windows a week earlier as normal-traffic controls.`
+  : `${C.frames.toLocaleString()} frames from ${C.cameras} LTA cameras over ${C.hours} hours (${fmtTime(C.start)} to ${fmtTime(C.end)}), with LTA's live incident feed.`;
+if (D.hero) {
+  const h = D.hero;
+  $('heroFig').innerHTML = `<div class="frame"><img src="${esc(h.img)}" alt="Camera ${esc(h.camera_id)} frame showing ${esc(h.kind || 'an incident')}"><div class="stamp">Camera ${esc(h.camera_id)}, ${esc(fmtTime(h.image_ts))}</div></div>
+  <figcaption><b>${esc(h.title)}</b> ${esc(h.caption)}</figcaption>`;
+}
+
+// ---- contact sheets
+function sheet(title, rate, note) {
+  const hits = rate == null || isNaN(rate) ? 0 : Math.round(100 * rate);
+  let tiles = '';
+  for (let i = 0; i < 100; i++) tiles += i < hits ? `<i class="hit" style="--d:${i}"></i>` : '<i></i>';
+  return `<div class="sheet"><h3><span>${esc(title)}</span><span class="n">${hits}</span></h3><div class="tiles" aria-hidden="true">${tiles}</div><p class="small muted">${esc(note)}</p></div>`;
+}
+if (P.n && bp) {
+  $('sheetIntro').textContent = 'Each tile is one frame a person looks at. Red tiles are the frames that showed an incident, at the rates measured below.';
+  $('sheetGrid').innerHTML =
+    sheet('Random order', P.p, `${P.k} of ${P.n} random frames (95% interval ${pct(P.lo, 1)} to ${pct(P.hi, 1)}).`) +
+    sheet(`Ranked: ${NAMES[best] || best}`, bp.p, `${bp.k} of the top ${bp.n} windows (95% interval ${pct(bp.lo)} to ${pct(bp.hi)}).`);
+} else {
+  $('sheets').style.display = 'none';
+}
+
+// ---- results table
+const order = ['random', 'speed', 'novelty', 'zeroshot', 'fused', 'learned'].filter(m => M.precision[m]);
+const rec = (M.feed && M.feed.recall) || {};
+function whisker(x) {
+  if (!x || x.n === 0) return '';
+  const w = 160, s = v => Math.max(0, Math.min(w, v * w));
+  return `<svg width="${w}" height="14" viewBox="0 0 ${w} 14" aria-hidden="true"><line x1="0" x2="${w}" y1="7" y2="7" stroke="var(--rule)"/><line x1="${s(x.lo)}" x2="${s(x.hi)}" y1="7" y2="7" stroke="currentColor" stroke-width="2"/><circle cx="${s(x.p)}" cy="7" r="4" fill="var(--green)"/></svg>`;
+}
+let rows = `<tr><th>Ranking</th><th>Incidents per 100 reviewed</th><th class="whisker">95% interval (0–100%)</th><th class="hide-sm">Faster than random</th><th class="hide-sm">Known incidents surfaced</th></tr>`;
+for (const m of order) {
+  const x = M.precision[m]['25'] || M.precision[m]['10'];
+  const r = rec[m] && rec[m]['25'];
+  rows += `<tr class="${m === best ? 'best' : ''}"><td>${NAMES[m] || m}</td><td class="num">${x ? per100(x.p) : '–'} <span class="muted small">(${x ? x.k + '/' + x.n : ''})</span></td>
+  <td class="whisker">${whisker(x)}</td><td class="num hide-sm">${m === 'random' ? '1×' : (x && x.lift ? x.lift.toFixed(1) + '×' : '–')}</td>
+  <td class="num hide-sm">${r && r.all != null ? pct(r.all) + ` <span class="muted small">of ${r.n_all}</span>` : '–'}</td></tr>`;
+}
+$('resTable').innerHTML = rows;
+$('resultsIntro').textContent = `Each ranking picks its top 25 camera-time windows (a window is one camera within ±15 minutes, so one long incident cannot fill the list). A person labelled every picked frame without knowing which ranking chose it.`;
+const notes = [];
+if (C.unsure) notes.push(`${C.unsure} frames marked “can't tell” (dark, blurred or distant) are left out of the rates.`);
+if (M.learned && M.learned.skipped) notes.push(`Learned ranking not run: ${M.learned.skipped}.`);
+if (M.feed && M.feed.events_total) notes.push(`“Known incidents surfaced” is the share of incidents in ${M.label_source} within ${M.camera_radius} m of a camera that the top 25 include.`);
+$('resultsNote').textContent = notes.join(' ');
+
+const V = M.vlm;
+if (V && V.confusion) {
+  const c = V.confusion, cas = V.cascade && best && V.cascade[best];
+  $('vlmBlock').innerHTML = `<h3 style="margin-top:24px">The VLM check (${esc(V.model)})</h3>
+  <p>Against the person's labels: precision ${pct(V.precision)}, recall ${pct(V.recall)}${V.kappa != null ? `, agreement κ = ${V.kappa.toFixed(2)}` : ''}. It said “can't tell” on ${pct(V.abstain_rate)} of frames.
+  ${cas ? `Used as a filter on the top 25, it cut the frames a person must review from ${cas.reviewed_before} to ${cas.reviewed_after} and kept ${cas.found_after} of ${cas.found_before} incidents.` : ''}
+  ${V.day_night && V.day_night.night && V.day_night.night.n ? ` At night its recall was ${pct(V.day_night.night.recall)}, against ${pct(V.day_night.day.recall)} by day.` : ''}</p>`;
+}
+
+// ---- examples
+const TABS = [['found', 'Incidents found'], ['vlm_false_alarm', 'VLM false alarms'], ['vlm_missed', 'VLM misses'], ['feed_not_visible', 'Reported, not visible']];
+const EX = D.examples || {};
+function card(e) {
+  const ranks = Object.entries(e).filter(([k, v]) => k.startsWith('rank_') && v != null && k !== 'rank_random').map(([k, v]) => `${NAMES[k.slice(5)] || k.slice(5)} #${v}`).join(', ');
+  const vlm = e.incident ? `VLM: ${e.incident}${e.type && e.type !== 'none' ? ' (' + e.type.replace('_', ' ') + ')' : ''}${e.evidence ? ', “' + esc(e.evidence) + '”' : ''}` : '';
+  return `<figure><div class="frame"><img loading="lazy" src="${esc(e.img)}" alt="Camera ${esc(e.camera_id)} frame"><div class="stamp">Camera ${esc(e.camera_id)}, ${esc(fmtTime(e.image_ts))}</div></div>
+  <figcaption>${e.label ? `<b>Person: ${e.label === 'yes' ? 'incident' + (e.kind ? ' (' + e.kind.replace('_', ' ') + ')' : '') : e.label === 'no' ? 'no incident' : "can't tell"}.</b> ` : ''}${vlm}${ranks ? `<br>Picked by: ${esc(ranks)}` : ''}${e.feed ? `<br>Feed: ${esc(e.feed)}` : ''}</figcaption></figure>`;
+}
+function show(key) {
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.k === key));
+  const list = EX[key] || [];
+  $('gallery').innerHTML = list.length ? list.map(card).join('') : '<p class="empty">None in this category.</p>';
+}
+$('tabs').innerHTML = TABS.filter(([k]) => EX[k]).map(([k, t]) => `<button role="tab" data-k="${k}">${t} (${(EX[k] || []).length})</button>`).join('');
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.dataset.k));
+if (TABS.some(([k]) => EX[k])) show(TABS.find(([k]) => EX[k])[0]);
+
+// ---- map
+const F = M.feed || {};
+$('mapIntro').textContent = F.events_total
+  ? `${M.kind === 'history' ? 'News reports used here' : "LTA's feed during collection"} gave ${F.events_total} incidents; ${F.events_near_camera} were within ${M.camera_radius} m of a camera${F.at_junction ? `, and ${F.at_junction} within 40 m of a signalised junction` : ''}.`
+  : 'No incident reports were collected.';
+$('junctionLine').textContent = F.events_total ? `Measurable from public data today: ${F.at_junction || 0} of the ${F.events_total} reported incidents here happened within 40 m of a traffic light (LTA's signal-aspect layer).` : '';
+if (window.L && D.cameras && D.cameras.length) {
+  const map = L.map('map', {scrollWheelZoom: false}).setView([1.3521, 103.8198], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap contributors'}).addTo(map);
+  const css = getComputedStyle(document.documentElement);
+  for (const c of D.cameras) L.circleMarker([c.lat, c.lon], {radius: 4, weight: 1, color: '#5B646B', fillOpacity: .6}).bindTooltip(`Camera ${c.camera_id}`).addTo(map);
+  for (const e of (D.events || [])) L.circleMarker([e.lat, e.lon], {radius: 6, weight: e.at_junction ? 3 : 1, color: css.getPropertyValue('--red').trim() || '#D22B22', fillOpacity: .8})
+    .bindPopup(`<b>${esc(e.type)}</b><br>${esc(e.message)}${e.at_junction ? '<br>At a signalised junction' : ''}`).addTo(map);
+} else { $('map').style.display = 'none'; }
+
+// ---- limits
+$('limitsList').innerHTML = (D.limits || []).map(l => `<li>${esc(l)}</li>`).join('');
+</script>
+</body>
+</html>
